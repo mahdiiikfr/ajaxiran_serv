@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.pyo
+bot_database.sqlite3
+.env
