@@ -21,6 +21,29 @@ async def check_channel_membership(bot, user_id: int) -> bool:
         return True # Default to true if bot is not in channel or error
     return False
 
+async def show_start_menu(bot, chat_id: int, user_id: int):
+    # Check Channel
+    if not await check_channel_membership(bot, user_id):
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        builder = InlineKeyboardBuilder()
+        builder.button(text="📢 عضویت در کانال", url=f"https://t.me/{REQUIRED_CHANNEL.replace('@', '')}")
+        builder.button(text="✅ عضو شدم", callback_data="check_join")
+        builder.adjust(1)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=f"⚠️ <b>جهت استفاده از ربات، ابتدا در کانال ما عضو شوید:</b>\n\n🆔 {REQUIRED_CHANNEL}",
+            reply_markup=builder.as_markup()
+        )
+        return
+
+    balance = await get_wallet(user_id)
+    msg = (
+        f"🚀 <b>به ربات هوشمند خدمات VPN خوش آمدید!</b>\n\n"
+        f"💳 <b>موجودی کیف پول شما:</b> <code>{balance:,}</code> تومان\n\n"
+        f"از منوی زیر گزینه مورد نظر خود را انتخاب کنید 👇"
+    )
+    await bot.send_message(chat_id=chat_id, text=msg, reply_markup=get_main_menu())
+
 @router.message(CommandStart())
 async def start_handler(message: Message):
     user_id = message.from_user.id
@@ -42,26 +65,7 @@ async def start_handler(message: Message):
         await message.answer(rules_text, reply_markup=get_rules_acceptance())
         return
 
-    # Check Channel
-    if not await check_channel_membership(message.bot, user_id):
-        from aiogram.utils.keyboard import InlineKeyboardBuilder
-        builder = InlineKeyboardBuilder()
-        builder.button(text="📢 عضویت در کانال", url=f"https://t.me/{REQUIRED_CHANNEL.replace('@', '')}")
-        builder.button(text="✅ عضو شدم", callback_data="check_join")
-        builder.adjust(1)
-        await message.answer(
-            f"⚠️ **جهت استفاده از ربات، ابتدا در کانال ما عضو شوید:**\n\n🆔 {REQUIRED_CHANNEL}",
-            reply_markup=builder.as_markup()
-        )
-        return
-
-    balance = await get_wallet(user_id)
-    msg = (
-        f"🚀 <b>به ربات هوشمند خدمات VPN خوش آمدید!</b>\n\n"
-        f"💳 <b>موجودی کیف پول شما:</b> <code>{balance:,}</code> تومان\n\n"
-        f"از منوی زیر گزینه مورد نظر خود را انتخاب کنید 👇"
-    )
-    await message.answer(msg, reply_markup=get_main_menu())
+    await show_start_menu(message.bot, message.chat.id, user_id)
 
 @router.callback_query(F.data == "accept_rules")
 async def accept_rules_handler(callback: CallbackQuery):
@@ -71,13 +75,13 @@ async def accept_rules_handler(callback: CallbackQuery):
     await callback.message.delete()
 
     # Restart the flow
-    await start_handler(callback.message)
+    await show_start_menu(callback.bot, callback.message.chat.id, user_id)
 
 @router.callback_query(F.data == "check_join")
 async def check_join_handler(callback: CallbackQuery):
     user_id = callback.from_user.id
     if await check_channel_membership(callback.bot, user_id):
         await callback.message.delete()
-        await start_handler(callback.message)
+        await show_start_menu(callback.bot, callback.message.chat.id, user_id)
     else:
         await callback.answer("❌ هنوز در کانال عضو نشده‌اید!", show_alert=True)

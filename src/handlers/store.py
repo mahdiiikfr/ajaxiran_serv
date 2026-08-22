@@ -33,6 +33,20 @@ def get_panel_price(volume_gb: int, is_gaming: bool) -> int:
 
 def generate_random_string(length=6):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+def generate_random_password():
+    # Password must be at least 12 characters long;
+    # must contain at least 2 digits;
+    # must contain at least 2 lowercase letters
+    import string
+    import random
+    lowers = random.choices(string.ascii_lowercase, k=3)
+    digits = random.choices(string.digits, k=3)
+    uppers = random.choices(string.ascii_uppercase, k=4)
+    specials = random.choices(["!", "@", "#", "$", "%", "&"], k=2)
+
+    pwd_list = lowers + digits + uppers + specials
+    random.shuffle(pwd_list)
+    return "".join(pwd_list)
 
 # --- VPN Store ---
 @router.message(F.text == "🛒 خرید اشتراک عادی (تانل/مستقیم)")
@@ -110,7 +124,21 @@ async def checkout_vpn(msg_obj: Message, volume_gb: int, vpn_type: str, state: F
         expire_duration = 30 * 24 * 3600 # 30 days
 
         created = await api.create_user(username, bytes_limit, expire_duration, [group_id], f"Created by Bot - User {user_id}")
-        sub_link = f"{PASARGUARD_BASE_URL.rstrip('/')}{created['subscription_url']}"
+
+        # Check if created is a dict and has subscription_url
+        if isinstance(created, dict) and 'subscription_url' in created:
+            sub_path = created['subscription_url']
+        elif isinstance(created, dict) and 'links' in created and isinstance(created['links'], list) and len(created['links']) > 0:
+            sub_path = created['links'][0]
+        else:
+            # Fallback based on typical Marzban/PasarGuard structure if subscription_url isn't directly returned but token is.
+            # Some versions return `subscription_url`, some return `links`. If we don't have it, we might need to assume.
+            sub_path = created.get('subscription_url', f"/sub/{created.get('subscription_token', username)}") if isinstance(created, dict) else f"/sub/{username}"
+
+        if sub_path.startswith('http'):
+            sub_link = sub_path
+        else:
+            sub_link = f"{PASARGUARD_BASE_URL.rstrip('/')}{sub_path}"
 
         await add_user_service(user_id, username, sub_link, volume_gb, vpn_type)
 
@@ -226,7 +254,7 @@ async def checkout_panel(msg_obj: Message, volume_gb: int, panel_type: str, stat
 
     try:
         op_username = f"op_{generate_random_string(4)}"
-        op_password = f"P@{generate_random_string(6).upper()}"
+        op_password = generate_random_password()
 
         # We pass data_limit for the operator to the admin creation endpoint
         bytes_limit = volume_gb * 1024**3

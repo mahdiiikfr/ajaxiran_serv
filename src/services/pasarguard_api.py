@@ -61,9 +61,10 @@ class PasarGuardAPI:
         return await self._request("GET", "/api/groups")
 
     async def get_group_by_name(self, name: str) -> Optional[int]:
-        groups = await self.get_groups()
+        res = await self.get_groups()
+        groups = res if isinstance(res, list) else res.get('groups', []) if isinstance(res, dict) else []
         for group in groups:
-            if group.get('name') == name:
+            if isinstance(group, dict) and group.get('name') == name:
                 return group.get('id')
         return None
 
