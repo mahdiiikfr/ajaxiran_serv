@@ -68,9 +68,14 @@ class PasarGuardAPI:
         elif isinstance(res, list):
             groups = res
 
+        # حذف نقطه و فاصله‌های اضافه برای جلوگیری از خطای حساسیت به حروف
+        search_name = str(name).replace('.', '').strip()
+
         for group in groups:
-            if isinstance(group, dict) and group.get('name') == name:
-                return int(group.get('id'))
+            if isinstance(group, dict):
+                panel_name = str(group.get('name', '')).replace('.', '').strip()
+                if panel_name == search_name:
+                    return int(group.get('id'))
         return None
 
     async def create_user(self, username: str, data_limit: int, expire_duration: int, group_ids: List[int], note: str = ""):
