@@ -62,22 +62,27 @@ class PasarGuardAPI:
 
     async def get_group_by_name(self, name: str) -> Optional[int]:
         res = await self.get_groups()
-        groups = res if isinstance(res, list) else res.get('groups', []) if isinstance(res, dict) else []
+        groups = []
+        if isinstance(res, dict):
+            groups = res.get("groups", res.get("data", []))
+        elif isinstance(res, list):
+            groups = res
+
         for group in groups:
             if isinstance(group, dict) and group.get('name') == name:
-                return group.get('id')
+                return int(group.get('id'))
         return None
 
     async def create_user(self, username: str, data_limit: int, expire_duration: int, group_ids: List[int], note: str = ""):
-        # Group IDs format expected: list of dict with 'id'
-        groups = [{"id": group_id} for group_id in group_ids] if group_ids else []
+        # تبدیل تمام آیدی‌های گروه به عدد صحیح برای رفع ارور Integer پاسارگارد
+        valid_groups = [int(g) for g in group_ids if g is not None]
         payload = {
-            "username": username,
-            "data_limit": data_limit, # bytes
-            "expire_duration": expire_duration, # seconds
+            "username": str(username),
+            "data_limit": int(data_limit), # bytes
+            "expire_duration": int(expire_duration), # seconds
             "status": "active",
-            "note": note,
-            "group_ids": groups
+            "note": str(note),
+            "group_ids": valid_groups
         }
         return await self._request("POST", "/api/user", json=payload)
 
@@ -87,7 +92,8 @@ class PasarGuardAPI:
             "username": username,
             "password": password,
             "is_sudo": is_sudo,
-            "role_id": role_id, "data_limit": data_limit
+            "role_id": role_id, 
+            "data_limit": data_limit
         }
         return await self._request("POST", "/api/admin", json=payload)
 
