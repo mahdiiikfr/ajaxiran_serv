@@ -1,5 +1,6 @@
 import aiohttp
 import logging
+import time  # اضافه شده برای محاسبه زمان دقیق انقضا
 from typing import Optional, List, Dict, Any
 
 from config import PASARGUARD_BASE_URL, PASARGUARD_USERNAME, PASARGUARD_PASSWORD
@@ -68,7 +69,7 @@ class PasarGuardAPI:
         elif isinstance(res, list):
             groups = res
 
-        # حذف نقطه و فاصله‌های اضافه برای جلوگیری از خطای حساسیت به حروف
+        # حذف نقطه و فاصله‌های اضافه
         search_name = str(name).replace('.', '').strip()
 
         for group in groups:
@@ -79,12 +80,15 @@ class PasarGuardAPI:
         return None
 
     async def create_user(self, username: str, data_limit: int, expire_duration: int, group_ids: List[int], note: str = ""):
-        # تبدیل تمام آیدی‌های گروه به عدد صحیح برای رفع ارور Integer پاسارگارد
         valid_groups = [int(g) for g in group_ids if g is not None]
+        
+        # محاسبه دقیق زمان انقضا (زمان فعلی + مدت زمان)
+        expire_timestamp = int(time.time()) + int(expire_duration)
+        
         payload = {
             "username": str(username),
             "data_limit": int(data_limit), # bytes
-            "expire_duration": int(expire_duration), # seconds
+            "expire": expire_timestamp, # رفع ارور زمان نامحدود
             "status": "active",
             "note": str(note),
             "group_ids": valid_groups
@@ -92,7 +96,6 @@ class PasarGuardAPI:
         return await self._request("POST", "/api/user", json=payload)
 
     async def create_admin(self, username: str, password: str, is_sudo: bool = False, role_id: int = 3, data_limit: int = 0):
-        # We can pass data_limit for operators to assign them a volume limit in panel
         payload = {
             "username": username,
             "password": password,
@@ -103,7 +106,6 @@ class PasarGuardAPI:
         return await self._request("POST", "/api/admin", json=payload)
 
     async def modify_admin_data_limit(self, username: str, additional_bytes: int):
-        # Fetch current admin data
         admins = await self._request("GET", "/api/admins")
         target_admin = None
         for admin in admins:
@@ -117,5 +119,4 @@ class PasarGuardAPI:
         current_limit = target_admin.get('data_limit', 0)
         new_limit = current_limit + additional_bytes
 
-        # We need the username to modify.
         return await self._request("PUT", f"/api/admin/{username}", json={"data_limit": new_limit})
