@@ -45,46 +45,54 @@ def generate_random_password():
     random.shuffle(pwd_list)
     return "".join(pwd_list)
 
-# --- سیستم جلوگیری از دریافت مجدد تست رایگان ---
-async def is_test_used(user_id: int) -> bool:
-    try:
-        from database.crud import is_test_used as db_check
-        return await db_check(user_id)
-    except ImportError:
-        if not os.path.exists("used_tests.json"):
-            return False
-        with open("used_tests.json", "r") as f:
-            return str(user_id) in json.load(f)
+# --- سیستم پیشرفته جلوگیری از سوءاستفاده (مجزا برای گیمینگ و عادی) ---
+TESTS_FILE = "used_tests_v2.json"
 
-async def set_test_used(user_id: int):
+async def is_test_used(user_id: int, vpn_type: str) -> bool:
+    if not os.path.exists(TESTS_FILE):
+        return False
     try:
-        from database.crud import set_test_used as db_set
-        await db_set(user_id)
-    except ImportError:
-        data = {}
-        if os.path.exists("used_tests.json"):
-            with open("used_tests.json", "r") as f:
+        with open(TESTS_FILE, "r") as f:
+            data = json.load(f)
+        # بررسی می‌کند که آیا کاربر این نوع خاص از تست را گرفته یا نه
+        return data.get(str(user_id), {}).get(vpn_type, False)
+    except:
+        return False
+
+async def set_test_used(user_id: int, vpn_type: str):
+    data = {}
+    if os.path.exists(TESTS_FILE):
+        try:
+            with open(TESTS_FILE, "r") as f:
                 data = json.load(f)
-        data[str(user_id)] = True
-        with open("used_tests.json", "w") as f:
-            json.dump(data, f)
+        except:
+            pass
+            
+    if str(user_id) not in data:
+        data[str(user_id)] = {}
+        
+    data[str(user_id)][vpn_type] = True
+    
+    with open(TESTS_FILE, "w") as f:
+        json.dump(data, f)
 
 # --- Free Test Store ---
 @router.message(F.text.in_(["🎁 تست سرویس عادی (تانل/مستقیم)", "🎁 تست سرویس گیمینگ"]))
 async def process_free_test(message: Message, state: FSMContext):
     user_id = message.from_user.id
     is_gaming = "گیمینگ" in message.text
+    vpn_type = "gaming" if is_gaming else "normal"
+    vpn_name = "گیمینگ" if is_gaming else "عادی (تانل/مستقیم)"
 
-    # بررسی دریافت تست در گذشته
-    if await is_test_used(user_id):
-        return await message.answer("❌ شما قبلاً سرویس تست رایگان خود را دریافت کرده‌اید و امکان دریافت مجدد وجود ندارد!")
+    # بررسی دریافت تست در گذشته (اختصاصی برای هر نوع)
+    if await is_test_used(user_id, vpn_type):
+        return await message.answer(f"❌ شما قبلاً سرویس تست رایگان **{vpn_name}** خود را دریافت کرده‌اید!\n\nشما فقط مجاز به دریافت یک بار تست از هر نوع هستید.")
 
-    text = "⏳ در حال ساخت اکانت تست رایگان (۱ گیگ / ۱ روزه)..."
+    text = f"⏳ در حال ساخت اکانت تست رایگان {vpn_name} (۱ گیگ / ۱ روزه)..."
     msg_obj = await message.answer(text)
 
     volume_gb = 1
     expire_duration = 1 * 24 * 3600 # 1 day
-    vpn_type = "gaming" if is_gaming else "normal"
 
     try:
         group_name = PASARGUARD_GROUP_GAMING if is_gaming else PASARGUARD_GROUP_NORMAL
@@ -92,11 +100,11 @@ async def process_free_test(message: Message, state: FSMContext):
         if not group_id:
              raise Exception(f"گروه '{group_name}' در پنل یافت نشد.")
 
-        # پیشوند t برای تست
+        # پیشوند tg برای گیمینگ و tn برای عادی
         username = f"{'tg' if is_gaming else 'tn'}test{generate_random_string(4)}"
         bytes_limit = volume_gb * 1024**3
 
-        created = await api.create_user(username, bytes_limit, expire_duration, [group_id], f"Free Test - User {user_id}")
+        created = await api.create_user(username, bytes_limit, expire_duration, [group_id], f"Free Test {vpn_type} - User {user_id}")
 
         if isinstance(created, dict) and 'subscription_url' in created:
             sub_path = created['subscription_url']
@@ -111,10 +119,10 @@ async def process_free_test(message: Message, state: FSMContext):
             sub_link = f"{PASARGUARD_BASE_URL.rstrip('/')}{sub_path}"
 
         await add_user_service(user_id, username, sub_link, volume_gb, vpn_type)
-        await set_test_used(user_id) # ثبت کاربر در لیست دریافت‌کنندگان تست
+        await set_test_used(user_id, vpn_type) # ثبت کاربر برای این نوع خاص
 
         res_msg = (
-            f"🎉 <b>اشتراک تست رایگان شما با موفقیت ساخته شد!</b>\n\n"
+            f"🎉 <b>اشتراک تست {vpn_name} شما با موفقیت ساخته شد!</b>\n\n"
             f"👤 <b>نام کاربری:</b> <code>{username}</code>\n"
             f"📊 <b>حجم:</b> {volume_gb} گیگابایت\n"
             f"⏳ <b>زمان:</b> 24 ساعت (1 روز)\n\n"
