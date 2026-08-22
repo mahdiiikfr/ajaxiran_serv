@@ -1,6 +1,8 @@
 import logging
 import random
 import string
+import os
+import json
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
@@ -33,20 +35,96 @@ def get_panel_price(volume_gb: int, is_gaming: bool) -> int:
 
 def generate_random_string(length=6):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+
 def generate_random_password():
-    # Password must be at least 12 characters long;
-    # must contain at least 2 digits;
-    # must contain at least 2 lowercase letters
-    import string
-    import random
     lowers = random.choices(string.ascii_lowercase, k=3)
     digits = random.choices(string.digits, k=3)
     uppers = random.choices(string.ascii_uppercase, k=4)
     specials = random.choices(["!", "@", "#", "$", "%", "&"], k=2)
-
     pwd_list = lowers + digits + uppers + specials
     random.shuffle(pwd_list)
     return "".join(pwd_list)
+
+# --- سیستم جلوگیری از دریافت مجدد تست رایگان ---
+async def is_test_used(user_id: int) -> bool:
+    try:
+        from database.crud import is_test_used as db_check
+        return await db_check(user_id)
+    except ImportError:
+        if not os.path.exists("used_tests.json"):
+            return False
+        with open("used_tests.json", "r") as f:
+            return str(user_id) in json.load(f)
+
+async def set_test_used(user_id: int):
+    try:
+        from database.crud import set_test_used as db_set
+        await db_set(user_id)
+    except ImportError:
+        data = {}
+        if os.path.exists("used_tests.json"):
+            with open("used_tests.json", "r") as f:
+                data = json.load(f)
+        data[str(user_id)] = True
+        with open("used_tests.json", "w") as f:
+            json.dump(data, f)
+
+# --- Free Test Store ---
+@router.message(F.text.in_(["🎁 تست سرویس عادی (تانل/مستقیم)", "🎁 تست سرویس گیمینگ"]))
+async def process_free_test(message: Message, state: FSMContext):
+    user_id = message.from_user.id
+    is_gaming = "گیمینگ" in message.text
+
+    # بررسی دریافت تست در گذشته
+    if await is_test_used(user_id):
+        return await message.answer("❌ شما قبلاً سرویس تست رایگان خود را دریافت کرده‌اید و امکان دریافت مجدد وجود ندارد!")
+
+    text = "⏳ در حال ساخت اکانت تست رایگان (۱ گیگ / ۱ روزه)..."
+    msg_obj = await message.answer(text)
+
+    volume_gb = 1
+    expire_duration = 1 * 24 * 3600 # 1 day
+    vpn_type = "gaming" if is_gaming else "normal"
+
+    try:
+        group_name = PASARGUARD_GROUP_GAMING if is_gaming else PASARGUARD_GROUP_NORMAL
+        group_id = await api.get_group_by_name(group_name)
+        if not group_id:
+             raise Exception(f"گروه '{group_name}' در پنل یافت نشد.")
+
+        # پیشوند t برای تست
+        username = f"{'tg' if is_gaming else 'tn'}test{generate_random_string(4)}"
+        bytes_limit = volume_gb * 1024**3
+
+        created = await api.create_user(username, bytes_limit, expire_duration, [group_id], f"Free Test - User {user_id}")
+
+        if isinstance(created, dict) and 'subscription_url' in created:
+            sub_path = created['subscription_url']
+        elif isinstance(created, dict) and 'links' in created and isinstance(created['links'], list) and len(created['links']) > 0:
+            sub_path = created['links'][0]
+        else:
+            sub_path = created.get('subscription_url', f"/sub/{created.get('subscription_token', username)}") if isinstance(created, dict) else f"/sub/{username}"
+
+        if sub_path.startswith('http'):
+            sub_link = sub_path
+        else:
+            sub_link = f"{PASARGUARD_BASE_URL.rstrip('/')}{sub_path}"
+
+        await add_user_service(user_id, username, sub_link, volume_gb, vpn_type)
+        await set_test_used(user_id) # ثبت کاربر در لیست دریافت‌کنندگان تست
+
+        res_msg = (
+            f"🎉 <b>اشتراک تست رایگان شما با موفقیت ساخته شد!</b>\n\n"
+            f"👤 <b>نام کاربری:</b> <code>{username}</code>\n"
+            f"📊 <b>حجم:</b> {volume_gb} گیگابایت\n"
+            f"⏳ <b>زمان:</b> 24 ساعت (1 روز)\n\n"
+            f"🔗 <b>لینک اشتراک:</b>\n<code>{sub_link}</code>"
+        )
+        await msg_obj.edit_text(res_msg)
+
+    except Exception as e:
+        logger.error(f"Error creating Test VPN user: {e}")
+        await msg_obj.edit_text(f"❌ متاسفانه خطایی در ارتباط با سرور رخ داد.\nخطا: {str(e)}")
 
 # --- VPN Store ---
 @router.message(F.text == "🛒 خرید اشتراک عادی (تانل/مستقیم)")
@@ -125,14 +203,11 @@ async def checkout_vpn(msg_obj: Message, volume_gb: int, vpn_type: str, state: F
 
         created = await api.create_user(username, bytes_limit, expire_duration, [group_id], f"Created by Bot - User {user_id}")
 
-        # Check if created is a dict and has subscription_url
         if isinstance(created, dict) and 'subscription_url' in created:
             sub_path = created['subscription_url']
         elif isinstance(created, dict) and 'links' in created and isinstance(created['links'], list) and len(created['links']) > 0:
             sub_path = created['links'][0]
         else:
-            # Fallback based on typical Marzban/PasarGuard structure if subscription_url isn't directly returned but token is.
-            # Some versions return `subscription_url`, some return `links`. If we don't have it, we might need to assume.
             sub_path = created.get('subscription_url', f"/sub/{created.get('subscription_token', username)}") if isinstance(created, dict) else f"/sub/{username}"
 
         if sub_path.startswith('http'):
@@ -256,7 +331,6 @@ async def checkout_panel(msg_obj: Message, volume_gb: int, panel_type: str, stat
         op_username = f"op_{generate_random_string(4)}"
         op_password = generate_random_password()
 
-        # We pass data_limit for the operator to the admin creation endpoint
         bytes_limit = volume_gb * 1024**3
         await api.create_admin(op_username, op_password, is_sudo=False, role_id=3, data_limit=bytes_limit)
 
@@ -317,11 +391,6 @@ async def process_panel_renewal_volume(message: Message, state: FSMContext):
 
     await add_wallet(message.from_user.id, -price)
     try:
-        # To renew, we update the admin data_limit in PasarGuard
-        # First we need to fetch the admin's current data_limit to add to it,
-        # or we assume we can just modify it via a specific API endpoint if available.
-        # Since we only have create_admin, let's assume we implement a modify_admin method.
-        # For the sake of this prompt, we will use a generic modify_admin call on our api.
         bytes_add = vol * 1024**3
         await api.modify_admin_data_limit(op_username, bytes_add)
 
