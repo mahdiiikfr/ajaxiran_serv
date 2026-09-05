@@ -39,10 +39,17 @@ async def my_services(message: Message):
         await message.answer("❌ شما هنوز سرویسی خریداری نکرده‌اید.")
         return
 
-    msg = "📦 <b>لیست سرویس‌های شما:</b>\n\n"
+    msg = "📦 لیست سرویس‌های فعال شما:\n\n"
     for idx, s in enumerate(services, 1):
         # s[0] username, s[1] sub_link, s[2] volume_gb, s[3] type
         srv_type = "گیمینگ" if s[3] == "gaming" else "عادی"
-        msg += f"🔹 <b>سرویس {idx} ({srv_type}):</b>\n👤 کاربر: <code>{s[0]}</code>\n📊 حجم: {s[2]}GB\n🔗 لینک:\n<code>{s[1]}</code>\n--------------------\n"
+        msg += (
+            f"🔹 سرویس {idx} | نوع: {srv_type}\n"
+            f"👤 نام کاربری: <code>{s[0]}</code>\n"
+            f"📊 حجم کل: {s[2]} گیگابایت\n"
+            "🔗 لینک اتصال:\n"
+            f"<code>{s[1]}</code>\n"
+            "➖➖➖➖➖➖➖➖\n"
+        )
 
     await message.answer(msg)

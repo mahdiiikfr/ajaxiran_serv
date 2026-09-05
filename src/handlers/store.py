@@ -380,12 +380,15 @@ async def checkout_panel(msg_obj: Message, volume_gb: int, panel_type: str, stat
 
         await add_partner(user_id, op_username, panel_type)
 
+        dashboard_url = f"{PASARGUARD_BASE_URL.rstrip('/')}/dashboard/"
         res_msg = (
-            f"🎉 <b>پنل نمایندگی شما با موفقیت ساخته شد!</b>\n\n"
-            f"🌐 <b>آدرس ورود:</b> {PASARGUARD_BASE_URL.rstrip('/')}/dashboard/\n"
-            f"👤 <b>نام کاربری:</b> <code>{op_username}</code>\n"
-            f"🔑 <b>رمز عبور:</b> <code>{op_password}</code>\n"
-            f"📊 <b>حجم تخصیص یافته:</b> {volume_gb} گیگابایت"
+            "🎉 پنل نمایندگی شما با موفقیت ایجاد شد!\n\n"
+            "💼 شما اکنون یکی از همکاران ما هستید. اطلاعات ورود شما به پنل اختصاصی:\n\n"
+            f"🌐 آدرس ورود: {dashboard_url}\n"
+            f"👤 نام کاربری اپراتور: <code>{op_username}</code>\n"
+            f"🔑 رمز عبور: <code>{op_password}</code>\n"
+            f"📊 حجم تخصیص‌یافته: {volume_gb} گیگابایت\n\n"
+            "💡 پیشنهاد می‌کنیم این پیام را در پیام‌های ذخیره‌شده خود (Saved Messages) فوروارد کنید تا اطلاعاتتان گم نشود."
         )
         await msg_obj.edit_text(res_msg)
 

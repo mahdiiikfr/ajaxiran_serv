@@ -30,7 +30,11 @@ async def wallet_menu(message: Message, state: FSMContext):
     user_id = message.from_user.id
     balance = await get_wallet(user_id)
 
-    msg = f"💰 <b>کیف پول:</b> <code>{balance:,}</code> تومان\n\nلطفاً مبلغ شارژ را انتخاب کنید:"
+    msg = (
+        "💰 کیف پول و شارژ حساب\n\n"
+        f"💳 موجودی فعلی شما: <code>{balance:,}</code> تومان\n\n"
+        "💡 برای شارژ حساب، لطفاً مبلغ مورد نظر خود را از گزینه‌های زیر انتخاب کنید یا مبلغ دلخواه را وارد نمایید:"
+    )
     await message.answer(msg, reply_markup=get_charge_amounts())
 
 @router.callback_query(F.data.startswith("charge_amount_"))
@@ -219,13 +223,12 @@ async def pay_cart_handler(callback: CallbackQuery, state: FSMContext):
     amount = data.get("charge_amount")
 
     text = (
-        f"🧾 <b>فاکتور کارت به کارت</b>\n\n"
-        f"💳 مبلغ: <code>{amount:,}</code> تومان\n"
-        f"💳 شماره کارت مقصد:\n<code>{CARD_NUMBER}</code>\n"
+        "🧾 ثبت فیش واریزی (کارت به کارت)\n\n"
+        f"💰 مبلغ شارژ: <code>{amount:,}</code> تومان\n"
+        f"💳 شماره کارت مقصد جهت واریز:\n<code>{CARD_NUMBER}</code>\n"
         f"👤 بنام: {CARD_HOLDER}\n\n"
-        f"⚠️ شما فقط مجاز هستید با کارتی که تایید کرده‌اید واریز کنید:\n"
-        f"<code>{user['verified_card_number']}</code>\n\n"
-        "عکس فیش واریزی را ارسال کنید."
+        f"⚠️ توجه بسیار مهم: شما فقط مجاز به واریز با کارتی هستید که قبلاً در سیستم تایید کرده‌اید (<code>{user['verified_card_number']}</code>). در غیر این صورت حساب شما شارژ نخواهد شد.\n\n"
+        "📸 لطفاً همین الان تصویر فیش واریزی خود را ارسال کنید:"
     )
     await state.set_state(WalletState.waiting_for_receipt)
     await callback.message.edit_text(text)
