@@ -6,7 +6,7 @@ from config import SUPPORT_USERNAME
 
 router = Router()
 
-@router.message(F.text == "🎧 پشتیبانی و قوانین")
+@router.message(F.text.in_(["🎧 پشتیبانی", "📜 قوانین و راهنما"]))
 async def support_menu(message: Message):
     text = (
         "❓ <b>سوالات متداول</b>\n\n"

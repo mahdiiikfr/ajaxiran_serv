@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from keyboards.inline import get_vpn_packages, get_panel_packages
+from keyboards.inline import get_vpn_packages, get_panel_packages, get_service_type_selection
 from keyboards.reply import get_main_menu
 from database.crud import get_wallet, add_wallet, add_user_service, add_partner, get_partner
 from services.pasarguard_api import PasarGuardAPI
@@ -77,19 +77,26 @@ async def set_test_used(user_id: int, vpn_type: str):
         json.dump(data, f)
 
 # --- Free Test Store ---
-@router.message(F.text.in_(["🎁 تست سرویس عادی (تانل/مستقیم)", "🎁 تست سرویس گیمینگ"]))
-async def process_free_test(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    is_gaming = "گیمینگ" in message.text
-    vpn_type = "gaming" if is_gaming else "normal"
-    vpn_name = "گیمینگ" if is_gaming else "عادی (تانل/مستقیم)"
+@router.message(F.text == "🎁 دریافت تست رایگان")
+async def choose_free_test_type(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("🎁 <b>دریافت تست رایگان</b>\n\nلطفاً نوع سرویس تست خود را انتخاب کنید:", reply_markup=get_service_type_selection("test"))
+
+@router.callback_query(F.data.startswith("test_type_"))
+async def process_free_test(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    vpn_type = callback.data.split("_")[2]
+    is_gaming = (vpn_type == "gaming")
+    vpn_name = "گیمینگ" if is_gaming else "عادی"
 
     # بررسی دریافت تست در گذشته (اختصاصی برای هر نوع)
     if await is_test_used(user_id, vpn_type):
-        return await message.answer(f"❌ شما قبلاً سرویس تست رایگان **{vpn_name}** خود را دریافت کرده‌اید!\n\nشما فقط مجاز به دریافت یک بار تست از هر نوع هستید.")
+        return await callback.message.edit_text(f"❌ شما قبلاً سرویس تست رایگان **{vpn_name}** خود را دریافت کرده‌اید!\n\nشما فقط مجاز به دریافت یک بار تست از هر نوع هستید.")
 
     text = f"⏳ در حال ساخت اکانت تست رایگان {vpn_name} (۱ گیگ / ۱ روزه)..."
-    msg_obj = await message.answer(text)
+    await callback.message.edit_text(text)
+    msg_obj = callback.message
 
     volume_gb = 1
     expire_duration = 1 * 24 * 3600 # 1 day
@@ -135,17 +142,18 @@ async def process_free_test(message: Message, state: FSMContext):
         await msg_obj.edit_text(f"❌ متاسفانه خطایی در ارتباط با سرور رخ داد.\nخطا: {str(e)}")
 
 # --- VPN Store ---
-@router.message(F.text == "🛒 خرید اشتراک عادی (تانل/مستقیم)")
-async def vpn_normal_menu(message: Message, state: FSMContext):
+@router.message(F.text == "🛒 خرید اشتراک جدید")
+async def choose_vpn_type(message: Message, state: FSMContext):
     await state.clear()
-    await state.update_data(vpn_type="normal")
-    await message.answer("🛒 <b>بسته‌های اشتراک عادی (یک ماهه):</b>\n\nلطفاً حجم مورد نظر خود را انتخاب کنید:", reply_markup=get_vpn_packages("normal"))
+    await message.answer("🛒 <b>خرید اشتراک جدید</b>\n\nلطفاً نوع سرویس خود را انتخاب کنید:", reply_markup=get_service_type_selection("buy"))
 
-@router.message(F.text == "🎮 خرید اشتراک گیمینگ")
-async def vpn_gaming_menu(message: Message, state: FSMContext):
-    await state.clear()
-    await state.update_data(vpn_type="gaming")
-    await message.answer("🎮 <b>بسته‌های اشتراک گیمینگ (یک ماهه):</b>\n\nلطفاً حجم مورد نظر خود را انتخاب کنید:", reply_markup=get_vpn_packages("gaming"))
+@router.callback_query(F.data.startswith("buy_type_"))
+async def vpn_packages_menu(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    vpn_type = callback.data.split("_")[2]
+    await state.update_data(vpn_type=vpn_type)
+    vpn_name = "گیمینگ" if vpn_type == "gaming" else "عادی"
+    await callback.message.edit_text(f"🛒 <b>بسته‌های اشتراک {vpn_name} (یک ماهه):</b>\n\nلطفاً حجم مورد نظر خود را انتخاب کنید:", reply_markup=get_vpn_packages(vpn_type))
 
 @router.callback_query(F.data.startswith("buy_vpn_"))
 async def process_vpn_buy(callback: CallbackQuery, state: FSMContext):
@@ -242,7 +250,7 @@ async def checkout_vpn(msg_obj: Message, volume_gb: int, vpn_type: str, state: F
     await state.clear()
 
 # --- Panel Store ---
-@router.message(F.text == "💼 خرید و مدیریت پنل نمایندگی")
+@router.message(F.text == "💼 پنل نمایندگی (همکاری)")
 async def panel_menu(message: Message, state: FSMContext):
     await state.clear()
     partner = await get_partner(message.from_user.id)

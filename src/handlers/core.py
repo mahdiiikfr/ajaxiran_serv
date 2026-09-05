@@ -38,9 +38,10 @@ async def show_start_menu(bot, chat_id: int, user_id: int):
 
     balance = await get_wallet(user_id)
     msg = (
-        f"🚀 <b>به ربات هوشمند خدمات VPN خوش آمدید!</b>\n\n"
-        f"💳 <b>موجودی کیف پول شما:</b> <code>{balance:,}</code> تومان\n\n"
-        f"از منوی زیر گزینه مورد نظر خود را انتخاب کنید 👇"
+        f"🚀 به ربات هوشمند ما خوش آمدید!\n\n"
+        f"ما اینجاییم تا یک اتصال پرسرعت، امن و بدون قطعی را برای شما فراهم کنیم. 🌐\n\n"
+        f"💳 موجودی فعلی شما: <code>{balance:,}</code> تومان\n\n"
+        f"🎯 برای شروع، یکی از گزینه‌های منوی زیر را انتخاب کنید: 👇"
     )
     await bot.send_message(chat_id=chat_id, text=msg, reply_markup=get_main_menu())
 
