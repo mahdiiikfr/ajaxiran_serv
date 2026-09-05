@@ -38,6 +38,13 @@ def get_rules_acceptance() -> InlineKeyboardMarkup:
     builder.button(text="✅ قوانین را می‌پذیرم", callback_data="accept_rules")
     return builder.as_markup()
 
+def get_service_type_selection(flow_prefix: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🌍 سرویس عادی", callback_data=f"{flow_prefix}_type_normal")
+    builder.button(text="🎮 سرویس گیمینگ", callback_data=f"{flow_prefix}_type_gaming")
+    builder.adjust(2)
+    return builder.as_markup()
+
 def get_vpn_packages(type_prefix: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     packages = [10, 20, 50, 100]

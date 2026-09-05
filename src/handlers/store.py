@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from keyboards.inline import get_vpn_packages, get_panel_packages
+from keyboards.inline import get_vpn_packages, get_panel_packages, get_service_type_selection
 from keyboards.reply import get_main_menu
 from database.crud import get_wallet, add_wallet, add_user_service, add_partner, get_partner
 from services.pasarguard_api import PasarGuardAPI
@@ -77,19 +77,28 @@ async def set_test_used(user_id: int, vpn_type: str):
         json.dump(data, f)
 
 # --- Free Test Store ---
-@router.message(F.text.in_(["🎁 تست سرویس عادی (تانل/مستقیم)", "🎁 تست سرویس گیمینگ"]))
-async def process_free_test(message: Message, state: FSMContext):
-    user_id = message.from_user.id
-    is_gaming = "گیمینگ" in message.text
-    vpn_type = "gaming" if is_gaming else "normal"
-    vpn_name = "گیمینگ" if is_gaming else "عادی (تانل/مستقیم)"
+@router.message(F.text == "🎁 دریافت تست رایگان")
+async def choose_free_test_type(message: Message, state: FSMContext):
+    await state.clear()
+    msg = "⚡️ انتخاب نوع سرویس\n\nلطفاً نوع سرویسی که نیاز دارید را انتخاب کنید:"
+    await message.answer(msg, reply_markup=get_service_type_selection("test"))
+
+@router.callback_query(F.data.startswith("test_type_"))
+async def process_free_test(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    user_id = callback.from_user.id
+    vpn_type = callback.data.split("_")[2]
+    is_gaming = (vpn_type == "gaming")
+    vpn_name = "گیمینگ" if is_gaming else "عادی"
 
     # بررسی دریافت تست در گذشته (اختصاصی برای هر نوع)
     if await is_test_used(user_id, vpn_type):
-        return await message.answer(f"❌ شما قبلاً سرویس تست رایگان **{vpn_name}** خود را دریافت کرده‌اید!\n\nشما فقط مجاز به دریافت یک بار تست از هر نوع هستید.")
+        err = "⚠️ شما قبلاً از سرویس تست استفاده کرده‌اید!\n\nهر کاربر تنها مجاز به دریافت یک بار تست رایگان (عادی یا گیمینگ) می‌باشد. برای ادامه استفاده، لطفاً اشتراک تهیه کنید. 🌹"
+        return await callback.message.edit_text(err)
 
     text = f"⏳ در حال ساخت اکانت تست رایگان {vpn_name} (۱ گیگ / ۱ روزه)..."
-    msg_obj = await message.answer(text)
+    await callback.message.edit_text(text)
+    msg_obj = callback.message
 
     volume_gb = 1
     expire_duration = 1 * 24 * 3600 # 1 day
@@ -122,11 +131,15 @@ async def process_free_test(message: Message, state: FSMContext):
         await set_test_used(user_id, vpn_type) # ثبت کاربر برای این نوع خاص
 
         res_msg = (
-            f"🎉 <b>اشتراک تست {vpn_name} شما با موفقیت ساخته شد!</b>\n\n"
-            f"👤 <b>نام کاربری:</b> <code>{username}</code>\n"
-            f"📊 <b>حجم:</b> {volume_gb} گیگابایت\n"
-            f"⏳ <b>زمان:</b> 24 ساعت (1 روز)\n\n"
-            f"🔗 <b>لینک اشتراک:</b>\n<code>{sub_link}</code>"
+            "🎉 اشتراک شما با موفقیت ساخته شد!\n\n"
+            "🔰 جزئیات سرویس:\n"
+            f"👤 نام کاربری: <code>{username}</code>\n"
+            f"📊 حجم: {volume_gb} گیگابایت\n"
+            f"⏳ مدت زمان: 1 روز\n"
+            f"⚙️ نوع سرویس: {vpn_name}\n\n"
+            "🔗 لینک اتصال شما (کپی کنید):\n"
+            f"<code>{sub_link}</code>\n\n"
+            "💡 آموزش اتصال: لینک بالا را کپی کرده و در برنامه مربوطه (مانند V2RayNG یا NapsternetV) وارد کنید. در صورت نیاز به راهنمایی به بخش پشتیبانی مراجعه کنید."
         )
         await msg_obj.edit_text(res_msg)
 
@@ -135,17 +148,25 @@ async def process_free_test(message: Message, state: FSMContext):
         await msg_obj.edit_text(f"❌ متاسفانه خطایی در ارتباط با سرور رخ داد.\nخطا: {str(e)}")
 
 # --- VPN Store ---
-@router.message(F.text == "🛒 خرید اشتراک عادی (تانل/مستقیم)")
-async def vpn_normal_menu(message: Message, state: FSMContext):
+@router.message(F.text == "🛒 خرید اشتراک جدید")
+async def choose_vpn_type(message: Message, state: FSMContext):
     await state.clear()
-    await state.update_data(vpn_type="normal")
-    await message.answer("🛒 <b>بسته‌های اشتراک عادی (یک ماهه):</b>\n\nلطفاً حجم مورد نظر خود را انتخاب کنید:", reply_markup=get_vpn_packages("normal"))
+    msg = "⚡️ انتخاب نوع سرویس\n\nلطفاً نوع سرویسی که نیاز دارید را انتخاب کنید:"
+    await message.answer(msg, reply_markup=get_service_type_selection("buy"))
 
-@router.message(F.text == "🎮 خرید اشتراک گیمینگ")
-async def vpn_gaming_menu(message: Message, state: FSMContext):
-    await state.clear()
-    await state.update_data(vpn_type="gaming")
-    await message.answer("🎮 <b>بسته‌های اشتراک گیمینگ (یک ماهه):</b>\n\nلطفاً حجم مورد نظر خود را انتخاب کنید:", reply_markup=get_vpn_packages("gaming"))
+@router.callback_query(F.data.startswith("buy_type_"))
+async def vpn_packages_menu(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    vpn_type = callback.data.split("_")[2]
+    await state.update_data(vpn_type=vpn_type)
+    vpn_name = "گیمینگ" if vpn_type == "gaming" else "عادی"
+
+    msg = (
+        f"🛒 خرید اشتراک [ {vpn_name} ]\n\n"
+        "💡 سرویس‌های ما با بالاترین کیفیت و پینگ مناسب ارائه می‌شوند.\n\n"
+        "لطفاً حجم مورد نیاز خود را (یک ماهه) انتخاب کنید:"
+    )
+    await callback.message.edit_text(msg, reply_markup=get_vpn_packages(vpn_type))
 
 @router.callback_query(F.data.startswith("buy_vpn_"))
 async def process_vpn_buy(callback: CallbackQuery, state: FSMContext):
@@ -182,7 +203,12 @@ async def checkout_vpn(msg_obj: Message, volume_gb: int, vpn_type: str, state: F
 
     balance = await get_wallet(user_id)
     if balance < price:
-        err = f"❌ موجودی شما کافی نیست.\nموجودی: <code>{balance:,}</code> تومان\nمبلغ مورد نیاز: <code>{price:,}</code> تومان"
+        err = (
+            "❌ موجودی شما کافی نیست!\n\n"
+            f"💳 موجودی فعلی: <code>{balance:,}</code> تومان\n"
+            f"💰 مبلغ مورد نیاز: <code>{price:,}</code> تومان\n\n"
+            "👈 لطفاً از طریق دکمه «💰 کیف پول و شارژ» در منوی اصلی، حساب خود را شارژ کرده و مجدداً تلاش کنید."
+        )
         if edit:
             await msg_obj.edit_text(err)
         else:
@@ -225,12 +251,17 @@ async def checkout_vpn(msg_obj: Message, volume_gb: int, vpn_type: str, state: F
 
         await add_user_service(user_id, username, sub_link, volume_gb, vpn_type)
 
+        vpn_name = "گیمینگ" if is_gaming else "عادی"
         res_msg = (
-            f"🎉 <b>اشتراک شما با موفقیت ساخته شد!</b>\n\n"
-            f"👤 <b>نام کاربری:</b> <code>{username}</code>\n"
-            f"📊 <b>حجم:</b> {volume_gb} گیگابایت\n"
-            f"⏳ <b>زمان:</b> 30 روز\n\n"
-            f"🔗 <b>لینک اشتراک:</b>\n<code>{sub_link}</code>"
+            "🎉 اشتراک شما با موفقیت ساخته شد!\n\n"
+            "🔰 جزئیات سرویس:\n"
+            f"👤 نام کاربری: <code>{username}</code>\n"
+            f"📊 حجم: {volume_gb} گیگابایت\n"
+            f"⏳ مدت زمان: 30 روز\n"
+            f"⚙️ نوع سرویس: {vpn_name}\n\n"
+            "🔗 لینک اتصال شما (کپی کنید):\n"
+            f"<code>{sub_link}</code>\n\n"
+            "💡 آموزش اتصال: لینک بالا را کپی کرده و در برنامه مربوطه (مانند V2RayNG یا NapsternetV) وارد کنید. در صورت نیاز به راهنمایی به بخش پشتیبانی مراجعه کنید."
         )
         await msg_obj.edit_text(res_msg)
 
@@ -242,7 +273,7 @@ async def checkout_vpn(msg_obj: Message, volume_gb: int, vpn_type: str, state: F
     await state.clear()
 
 # --- Panel Store ---
-@router.message(F.text == "💼 خرید و مدیریت پنل نمایندگی")
+@router.message(F.text == "💼 پنل نمایندگی (همکاری)")
 async def panel_menu(message: Message, state: FSMContext):
     await state.clear()
     partner = await get_partner(message.from_user.id)
@@ -318,7 +349,12 @@ async def checkout_panel(msg_obj: Message, volume_gb: int, panel_type: str, stat
 
     balance = await get_wallet(user_id)
     if balance < price:
-        err = f"❌ موجودی شما کافی نیست.\nموجودی: <code>{balance:,}</code> تومان\nمبلغ مورد نیاز: <code>{price:,}</code> تومان"
+        err = (
+            "❌ موجودی شما کافی نیست!\n\n"
+            f"💳 موجودی فعلی: <code>{balance:,}</code> تومان\n"
+            f"💰 مبلغ مورد نیاز: <code>{price:,}</code> تومان\n\n"
+            "👈 لطفاً از طریق دکمه «💰 کیف پول و شارژ» در منوی اصلی، حساب خود را شارژ کرده و مجدداً تلاش کنید."
+        )
         if edit:
             await msg_obj.edit_text(err)
         else:
@@ -390,7 +426,12 @@ async def process_panel_renewal_volume(message: Message, state: FSMContext):
 
     balance = await get_wallet(message.from_user.id)
     if balance < price:
-        err = f"❌ موجودی شما کافی نیست.\nموجودی: <code>{balance:,}</code> تومان\nمبلغ مورد نیاز: <code>{price:,}</code> تومان"
+        err = (
+            "❌ موجودی شما کافی نیست!\n\n"
+            f"💳 موجودی فعلی: <code>{balance:,}</code> تومان\n"
+            f"💰 مبلغ مورد نیاز: <code>{price:,}</code> تومان\n\n"
+            "👈 لطفاً از طریق دکمه «💰 کیف پول و شارژ» در منوی اصلی، حساب خود را شارژ کرده و مجدداً تلاش کنید."
+        )
         await message.answer(err)
         await state.clear()
         return

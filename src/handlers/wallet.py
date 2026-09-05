@@ -24,7 +24,7 @@ class WalletState(StatesGroup):
     waiting_for_receipt = State()
     admin_waiting_for_card_number = State()
 
-@router.message(F.text == "💰 کیف پول / شارژ")
+@router.message(F.text == "💰 کیف پول و شارژ")
 async def wallet_menu(message: Message, state: FSMContext):
     await state.clear()
     user_id = message.from_user.id

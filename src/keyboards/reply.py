@@ -2,10 +2,10 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 def get_main_menu() -> ReplyKeyboardMarkup:
     keyboard = [
-        [KeyboardButton(text="🎁 تست سرویس عادی (تانل/مستقیم)"), KeyboardButton(text="🎁 تست سرویس گیمینگ")],
-        [KeyboardButton(text="🛒 خرید اشتراک عادی (تانل/مستقیم)"), KeyboardButton(text="🎮 خرید اشتراک گیمینگ")],
-        [KeyboardButton(text="💼 خرید و مدیریت پنل نمایندگی")],
-        [KeyboardButton(text="💰 کیف پول / شارژ"), KeyboardButton(text="📦 سرویس‌های من")],
-        [KeyboardButton(text="🎧 پشتیبانی و قوانین")]
+        [KeyboardButton(text="🛒 خرید اشتراک جدید")],
+        [KeyboardButton(text="🎁 دریافت تست رایگان")],
+        [KeyboardButton(text="📦 سرویس‌های من"), KeyboardButton(text="💰 کیف پول و شارژ")],
+        [KeyboardButton(text="💼 پنل نمایندگی (همکاری)")],
+        [KeyboardButton(text="🎧 پشتیبانی"), KeyboardButton(text="📜 قوانین و راهنما")]
     ]
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
